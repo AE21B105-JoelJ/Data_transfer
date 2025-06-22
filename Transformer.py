@@ -6,16 +6,20 @@ from torch.nn.utils.rnn import pad_sequence
 def encode(text):
     return torch.tensor([word2idx.get(t, unk_idx) for t in tokenize(text)])
 
-class PairDataset(Dataset):
-    def __init__(self, pairs):
-        self.pairs = pairs
+class DataFramePairDataset(Dataset):
+    def __init__(self, df):
+        self.text1 = df["text1"].tolist()
+        self.text2 = df["text2"].tolist()
+        self.labels = df["label"].tolist()
 
     def __getitem__(self, idx):
-        t1, t2, label = self.pairs[idx]
-        return encode(t1), encode(t2), torch.tensor(label, dtype=torch.float)
+        x1 = encode(self.text1[idx])
+        x2 = encode(self.text2[idx])
+        label = torch.tensor(self.labels[idx], dtype=torch.float)
+        return x1, x2, label
 
     def __len__(self):
-        return len(self.pairs)
+        return len(self.text1)
 
 def collate_fn(batch):
     x1, x2, y = zip(*batch)
@@ -24,8 +28,8 @@ def collate_fn(batch):
     y = torch.stack(y)
     return x1, x2, y
 
-train_dataset = PairDataset(pairs)
-train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, collate_fn=collate_fn)
+dataset = DataFramePairDataset(df)
+loader = torch.utils.data.DataLoader(dataset, batch_size=16, shuffle=True, collate_fn=collate_fn)
 
 
 
