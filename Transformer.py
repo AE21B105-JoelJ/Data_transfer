@@ -1,5 +1,50 @@
 # Transformer model from GPT
 
+from torch.utils.data import Dataset, DataLoader
+from torch.nn.utils.rnn import pad_sequence
+
+def encode(text):
+    return torch.tensor([word2idx.get(t, unk_idx) for t in tokenize(text)])
+
+class PairDataset(Dataset):
+    def __init__(self, pairs):
+        self.pairs = pairs
+
+    def __getitem__(self, idx):
+        t1, t2, label = self.pairs[idx]
+        return encode(t1), encode(t2), torch.tensor(label, dtype=torch.float)
+
+    def __len__(self):
+        return len(self.pairs)
+
+def collate_fn(batch):
+    x1, x2, y = zip(*batch)
+    x1 = pad_sequence(x1, batch_first=True, padding_value=pad_idx)
+    x2 = pad_sequence(x2, batch_first=True, padding_value=pad_idx)
+    y = torch.stack(y)
+    return x1, x2, y
+
+train_dataset = PairDataset(pairs)
+train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, collate_fn=collate_fn)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 import math
 import torch
 import torch.nn as nn
