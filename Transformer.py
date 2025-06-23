@@ -175,3 +175,68 @@ print(model.wv["word2vec"])
 print("\nWords similar to 'word2vec':")
 print(model.wv.most_similar("word2vec"))
 
+
+
+
+
+
+
+
+
+--------------------------------------------------------------------------------------------------------------------------
+# Attention based pooling
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class AttentionPooling(nn.Module):
+    def __init__(self, hidden_size):
+        super().__init__()
+        self.attn = nn.Linear(hidden_size, 1)
+
+    def forward(self, x, mask=None):
+        # x: (batch_size, seq_len, hidden_size)
+        scores = self.attn(x).squeeze(-1)  # (batch_size, seq_len)
+
+        if mask is not None:
+            scores = scores.masked_fill(mask == 0, float('-inf'))  # mask pad tokens
+
+        weights = F.softmax(scores, dim=1)  # (batch_size, seq_len)
+        output = torch.bmm(weights.unsqueeze(1), x)  # (batch_size, 1, hidden_size)
+        return output.squeeze(1)  # (batch_size, hidden_size)
+
+class TransformerSiameseNet(nn.Module):
+    def __init__(self, embedding_matrix, pad_idx):
+        super().__init__()
+        self.embedding = nn.Embedding.from_pretrained(
+            embedding_matrix, freeze=False, padding_idx=pad_idx
+        )
+
+        d_model = embedding_matrix.shape[1]
+        self.pos_enc = SinusoidalPositionalEncoding(d_model)
+
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=d_model, nhead=4, dim_feedforward=128, batch_first=True
+        )
+        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=1)
+
+        self.attn_pool = AttentionPooling(d_model)
+        self.pad_idx = pad_idx
+
+    def encode(self, x):
+        x_embed = self.embedding(x)                       # (B, L, D)
+        x_embed = self.pos_enc(x_embed)                   # (B, L, D)
+        x_encoded = self.encoder(x_embed)                 # (B, L, D)
+
+        # Create mask for attention pooling (1 for real tokens, 0 for pad)
+        mask = (x != self.pad_idx).int()                  # (B, L)
+
+        pooled = self.attn_pool(x_encoded, mask)          # (B, D)
+        return pooled
+
+    def forward(self, x1, x2):
+        v1 = self.encode(x1)
+        v2 = self.encode(x2)
+        return v1, v2
+
+
